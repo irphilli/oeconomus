@@ -29,12 +29,34 @@ exports.handler = (event, context, callback) => {
       switch (action) {
          case "get":
             const get = require('./get');
-            get.get(callback);
+            get.get(function(err, res) {
+               if (err) {
+                  callback(null, {
+                     statusCode: 400,
+                     body: JSON.stringify(err),
+                     headers: {
+                        'Access-Control-Allow-Origin': '*'
+                     }
+                  });
+               }
+               else {
+                  callback(null, {
+                     statusCode: 200,
+                     body: JSON.stringify(res),
+                     headers: {
+                        'Access-Control-Allow-Origin': '*'
+                     }
+                  });
+               }
+            });
          break;
          default:
             callback(null, {
                statusCode: 400,
-               body: 'unknown action ' + event.pathParameters.action
+               body: 'unknown action ' + event.pathParameters.action,
+               headers: {
+                  'Access-Control-Allow-Origin': '*'
+               }
 //               body: JSON.stringify(event)
             });
       }
@@ -42,7 +64,10 @@ exports.handler = (event, context, callback) => {
    else {
       callback(null, {
          statusCode: 403,
-         body: 'Access denied'
+         body: 'Access denied',
+         headers: {
+            'Access-Control-Allow-Origin': '*'
+         }
       });
    }
 };
