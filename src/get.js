@@ -26,7 +26,7 @@ exports.get = (callback) => {
             },
             {
                Name: 'instance-state-name',
-               Values: [ 'running' ]
+               Values: [ 'pending', 'running', 'stopping', 'stopped' ]
             }
          ]
       };
@@ -52,14 +52,6 @@ exports.get = (callback) => {
    };
 
    Promise.all(promises).then(function() {
-      callback(null, {
-         statusCode: 200,
-         body: JSON.stringify(result)
-      });
-   }).catch(function(err) {
-      callback(null, {
-         statusCode: 400,
-         body: err
-      });
-   });
+      callback(null, result);
+   }).catch(callback);
 };

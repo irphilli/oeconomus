@@ -17,6 +17,17 @@ launchInstance('do-1', 'developer', function(err, result) {
 });
 */
 
+exports.launch = (event, callback) => {
+   var parameters = event.queryStringParameters;
+   if (parameters && parameters.name && parameters.launchConfig) {
+      if (parameters.name.length > 0) {
+         launchInstance(parameters.name, parameters.launchConfig, callback);
+         return;
+      }
+   }
+   callback('Invalid parameters');
+};
+
 //TODO: tag volumes
 function launchInstance(name, launchConfigurationName, callback) {
    var launchConfiguration = launchConfigurations[launchConfigurationName];
@@ -55,7 +66,6 @@ function launchInstance(name, launchConfigurationName, callback) {
          };
          ec2.runInstances(launchConfig, function(err, data) {
             if (err) {
-               console.log(err);
                callback('runInstances failed: ' + err);
             }
             else {
@@ -63,5 +73,8 @@ function launchInstance(name, launchConfigurationName, callback) {
             }
          });
       }
+   }
+   else {
+      callback('Invalid launch configuration');
    }
 }
