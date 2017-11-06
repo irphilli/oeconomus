@@ -39,6 +39,12 @@ exports.handler = (event, context, callback) => {
                sendResponse(err, res, callback);
             });
             break;
+         case 'launch':
+            const launch = require('./launch');
+            launch.launch(event, function(err, res) {
+               sendResponse(err, res, callback);
+            });
+            break;
          default:
             callback(null, {
                statusCode: 400,
