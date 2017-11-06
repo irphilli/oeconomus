@@ -27,29 +27,18 @@ exports.handler = (event, context, callback) => {
          action = event.pathParameters.action;
       }
       switch (action) {
-         case "get":
+         case 'get':
             const get = require('./get');
             get.get(function(err, res) {
-               if (err) {
-                  callback(null, {
-                     statusCode: 400,
-                     body: JSON.stringify(err),
-                     headers: {
-                        'Access-Control-Allow-Origin': '*'
-                     }
-                  });
-               }
-               else {
-                  callback(null, {
-                     statusCode: 200,
-                     body: JSON.stringify(res),
-                     headers: {
-                        'Access-Control-Allow-Origin': '*'
-                     }
-                  });
-               }
+               sendResponse(err, res, callback);
             });
-         break;
+            break;
+         case 'terminate':
+            const terminate = require('./terminate');
+            terminate.terminate(event, function(err, res) {
+               sendResponse(err, res, callback);
+            });
+            break;
          default:
             callback(null, {
                statusCode: 400,
@@ -71,6 +60,27 @@ exports.handler = (event, context, callback) => {
       });
    }
 };
+
+function sendResponse(err, res, callback) {
+   if (err) {
+      callback(null, {
+         statusCode: 400,
+         body: JSON.stringify(err),
+         headers: {
+            'Access-Control-Allow-Origin': '*'
+         }
+      });
+   }
+   else {
+      callback(null, {
+         statusCode: 200,
+         body: JSON.stringify(res),
+         headers: {
+            'Access-Control-Allow-Origin': '*'
+         }
+      });
+   }
+}
 
 /*
 var event = {

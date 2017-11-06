@@ -26,7 +26,7 @@ exports.get = (callback) => {
             },
             {
                Name: 'instance-state-name',
-               Values: [ 'running' ]
+               Values: [ 'pending', 'running', 'stopping', 'stopped' ]
             }
          ]
       };
