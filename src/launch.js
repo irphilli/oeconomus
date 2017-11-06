@@ -48,6 +48,9 @@ function launchInstance(name, launchConfigurationName, callback) {
             SubnetId: subnet,
             UserData: launchConfiguration.userData,
             KeyName: config.keyName,
+            IamInstanceProfile: {
+               Name: launchConfiguration.role
+            },
             TagSpecifications: [
                {
                   ResourceType: 'instance',
