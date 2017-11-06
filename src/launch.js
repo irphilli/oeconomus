@@ -17,6 +17,12 @@ launchInstance('do-1', 'developer', function(err, result) {
 });
 */
 
+/*
+tagVolumes('do-1', 'i-0c307e6d37ace7a2e', function() {
+   console.log('done');
+});
+*/
+
 exports.launch = (event, callback) => {
    var parameters = event.queryStringParameters;
    if (parameters && parameters.name && parameters.launchConfig) {
@@ -28,7 +34,6 @@ exports.launch = (event, callback) => {
    callback('Invalid parameters');
 };
 
-//TODO: tag volumes
 function launchInstance(name, launchConfigurationName, callback) {
    var launchConfiguration = launchConfigurations[launchConfigurationName];
    if (launchConfiguration) {
@@ -72,7 +77,17 @@ function launchInstance(name, launchConfigurationName, callback) {
                callback('runInstances failed: ' + err);
             }
             else {
-               callback(null, data);
+               var operations = [];
+               operations.push(new Promise(function(resolve, reject) {
+                  setTimeout(function() {
+                     tagVolumes(name, data.Instances[0].InstanceId, function() {
+                        resolve();
+                     });
+                  }, 3000);
+               }));
+               Promise.all(operations).then(function() {
+                  callback(null, data);
+               });
             }
          });
       }
@@ -80,4 +95,57 @@ function launchInstance(name, launchConfigurationName, callback) {
    else {
       callback('Invalid launch configuration');
    }
+}
+
+function tagVolumes(name, instanceId, callback) {
+   var params = {
+      Filters: [
+         {
+            Name: "attachment.instance-id",
+            Values: [
+               instanceId
+            ]
+         }
+      ]
+   };
+
+   ec2.describeVolumes(params, function(err, data) {
+      if (err) {
+         // Log, but continue
+         console.error(err);
+         callback();
+      }
+      else {
+         var operations = [];
+         data.Volumes.forEach(function(volume) {
+            operations.push(new Promise(function(resolve, reject) {
+               var params = {
+                  Resources: [
+                     volume.VolumeId
+                  ],
+                  Tags: [
+                     {
+                        Key: "Name",
+                        Value: name
+                     }
+                  ]
+               };
+               ec2.createTags(params, function(err, data) {
+                  if (err) {
+                     // Log, but continue
+                     console.error(err);
+                     resolve();
+                  }
+                  else {
+                     console.log('tag created for ' + volume.VolumeId);
+                     resolve();
+                  }
+               });
+            }));
+         });
+         Promise.all(operations).then(function() {
+            callback();
+         });
+      }
+   });
 }
