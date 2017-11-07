@@ -250,6 +250,25 @@ function tagSpotInstance(requestId, tags, callback) {
             operations.push(new Promise(function(resolve, reject) {
                var params = {
                   Resources: [
+                     requestId
+                  ],
+                  Tags: tags
+               };
+               ec2.createTags(params, function(err, data) {
+                  if (err) {
+                     console.log(err);
+                     reject('Error tagging spot instance (notify DevOps)');
+                  }
+                  else {
+                     console.log('tags created for ' + requestId);
+                     resolve();
+                  }
+               });
+            }));
+
+            operations.push(new Promise(function(resolve, reject) {
+               var params = {
+                  Resources: [
                      instanceId
                   ],
                   Tags: tags
