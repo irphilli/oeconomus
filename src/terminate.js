@@ -1,8 +1,6 @@
 /*
  * Terminate an instance managed by Oeconomus
  */
-//TODO: test with spot instance - will need to cancel spot request
-//
 const config = require('./includes/config');
 
 const AWS = require('aws-sdk');
@@ -13,12 +11,48 @@ const ec2 = new AWS.EC2({apiVersion: config.awsApiVersion});
 exports.terminate = (event, callback) => {
    if (event.queryStringParameters && event.queryStringParameters.instanceId) {
       var instanceId = event.queryStringParameters.instanceId;
-      ec2.terminateInstances({ InstanceIds: [instanceId] }, function(err, data) {
-         if (err) {
-            callback('terminateInstances failed: ' + err);
+      var params = {
+         InstanceIds: [ instanceId ],
+         Filters: [
+            {
+               Name: 'instance-state-name',
+               Values: [ 'pending', 'running', 'stopping', 'stopped' ]
+            }
+         ]
+      }
+      ec2.describeInstances(params, function(err, data) {
+         if (data && data.Reservations.length != 0) {
+            var spotInstanceRequestId = data.Reservations[0].Instances[0].SpotInstanceRequestId;
+            if (spotInstanceRequestId) {
+               ec2.cancelSpotInstanceRequests({ SpotInstanceRequestIds: [ spotInstanceRequestId ] }, function (err, data) {
+                  if (err) {
+                     callback('terminateInstances failed: ' + err);
+                  }
+                  else {
+                     ec2.terminateInstances({ InstanceIds: [instanceId] }, function(err, data) {
+                        if (err) {
+                           callback('terminateInstances failed: ' + err);
+                        }
+                        else {
+                           callback(null, instanceId);
+                        }
+                     });
+                  }
+               });
+            }
+            else {
+               ec2.terminateInstances({ InstanceIds: [instanceId] }, function(err, data) {
+                  if (err) {
+                     callback('terminateInstances failed: ' + err);
+                  }
+                  else {
+                     callback(null, instanceId);
+                  }
+               });
+            }
          }
          else {
-            callback(null, instanceId);
+            callback(null, []);
          }
       });
    }
