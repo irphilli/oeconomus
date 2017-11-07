@@ -11,14 +11,14 @@ AWS.config.loadFromPath(config.globalConfig);
 const ec2 = new AWS.EC2({apiVersion: config.awsApiVersion});
 
 /*
-launchInstance('do-1', 'developer', function(err, result) {
+launchInstance('do-1', 'scrum', function(err, result) {
    console.error(err);
    console.log(result);
 });
 */
 
 /*
-tagVolumes('do-1', 'i-0c307e6d37ace7a2e', function() {
+tagVolumes('i-0c307e6d37ace7a2e', 'do-1', function() {
    console.log('done');
 });
 */
@@ -123,6 +123,50 @@ function launchInstance(name, launchConfigurationName, callback) {
       var subnet = launchConfiguration.subnets[Math.floor(Math.random()*launchConfiguration.subnets.length)];
 
       if (launchConfiguration.spot) {
+         var launchConfig = {
+            SpotPrice: launchConfiguration.bid,
+            InstanceCount: 1,
+            InstanceInterruptionBehavior: 'stop',
+            Type: 'persistent',
+            LaunchSpecification: {
+               ImageId: launchConfiguration.ami,
+               SecurityGroupIds: launchConfiguration.securityGroups,
+               InstanceType: launchConfiguration.instanceType,
+               SubnetId: subnet,
+               UserData: launchConfiguration.userData,
+               KeyName: config.keyName,
+               IamInstanceProfile: {
+                  Name: launchConfiguration.role
+               }
+            }
+         };
+         ec2.requestSpotInstances(launchConfig, function(err, data) {
+            if (err) {
+               callback(err);
+            }
+            else {
+               var requestId = data.SpotInstanceRequests[0].SpotInstanceRequestId;
+               var state = data.SpotInstanceRequests[0].State;
+               if (state == 'cancelled' || data.state == 'failed') {
+                  callback('Spot instance request failed');
+               }
+               else {
+                  var tags = [
+                     {
+                        Key: 'Name',
+                        Value: name
+                     },
+                     {
+                        Key: 'os-config',
+                        Value: launchConfigurationName
+                     }
+                  ];
+                  tagSpotInstance(requestId, tags, function(err) {
+                     callback(err);
+                  });
+               }
+            }
+         });
       }
       else
       {
@@ -161,7 +205,7 @@ function launchInstance(name, launchConfigurationName, callback) {
             else {
                var operations = [];
                operations.push(new Promise(function(resolve, reject) {
-                  tagVolumes(name, data.Instances[0].InstanceId, function() {
+                  tagVolumes(data.Instances[0].InstanceId, name, function() {
                      resolve();
                   });
                }));
@@ -177,19 +221,79 @@ function launchInstance(name, launchConfigurationName, callback) {
    }
 }
 
-function tagVolumes(name, instanceId, callback) {
-   var params = {
-      Filters: [
-         {
-            Name: "attachment.instance-id",
-            Values: [
-               instanceId
-            ]
-         }
-      ]
-   };
-
+function tagSpotInstance(requestId, tags, callback) {
    setTimeout(function() {
+      var params = {
+         SpotInstanceRequestIds: [
+            requestId
+         ]
+      };
+      ec2.describeSpotInstanceRequests(params, function(err, data) {
+         if (err) {
+            console.log(err);
+            callback('Error tagging spot instance (notify DevOps)');
+         }
+         else {
+            if (data.SpotInstanceRequests.length == 0) {
+               console.log('No spot instances');
+               callback('Error tagging spot instance (notify DevOps)');
+               return;
+            }
+
+            var instanceId = data.SpotInstanceRequests[0].InstanceId;
+            if (data.SpotInstanceRequests[0].Status.Code == 'pending-fulfillment') {
+               tagSpotInstance(requestId, tags, callback);
+               return;
+            }
+
+            var operations = [];
+            operations.push(new Promise(function(resolve, reject) {
+               var params = {
+                  Resources: [
+                     instanceId
+                  ],
+                  Tags: tags
+               };
+               ec2.createTags(params, function(err, data) {
+                  if (err) {
+                     console.log(err);
+                     reject('Error tagging spot instance (notify DevOps)');
+                  }
+                  else {
+                     console.log('tags created for ' + instanceId);
+                     resolve();
+                  }
+               });
+            }));
+
+            tags.forEach(function(tag) {
+               if (tag.Key == 'Name') {
+                  operations.push(new Promise(function(resolve, reject) {
+                     tagVolumes(instanceId, tag.Value, function() {
+                        resolve();
+                     });
+                  }));
+               }
+            });
+
+            Promise.all(operations).then(callback).catch(callback);
+         }
+      });
+   }, 5000);
+}
+
+function tagVolumes(instanceId, name, callback) {
+   setTimeout(function() {
+      var params = {
+         Filters: [
+            {
+               Name: "attachment.instance-id",
+               Values: [
+                  instanceId
+               ]
+            }
+         ]
+      };
       ec2.describeVolumes(params, function(err, data) {
          if (err) {
             // Log, but continue
