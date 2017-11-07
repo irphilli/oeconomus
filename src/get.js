@@ -55,3 +55,10 @@ exports.get = (callback) => {
       callback(null, result);
    }).catch(callback);
 };
+
+/*
+exports.get(function(err, res) {
+   console.log(err);
+   console.log(res);
+});
+*/

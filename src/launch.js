@@ -162,7 +162,7 @@ function launchInstance(name, launchConfigurationName, callback) {
                      }
                   ];
                   tagSpotInstance(requestId, tags, function(err) {
-                     callback(err);
+                     callback(err, data);
                   });
                }
             }

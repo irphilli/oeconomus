@@ -60,3 +60,16 @@ exports.terminate = (event, callback) => {
       callback(null, []);
    }
 };
+
+/*
+var tmp = {
+   queryStringParameters: {
+      instanceId: 'i-097d73a3b07c6e02f'
+   }
+};
+
+exports.terminate(tmp, function(err, res) {
+   console.log(err);
+   console.log(res);
+});
+*/
