@@ -23,16 +23,94 @@ tagVolumes('do-1', 'i-0c307e6d37ace7a2e', function() {
 });
 */
 
+/*
+checkCanLaunchInstance('pphillips', 'developer', function(canLaunch, reason) {
+   console.log(canLaunch);
+   console.log(reason);
+});
+*/
+
 exports.launch = (event, callback) => {
    var parameters = event.queryStringParameters;
    if (parameters && parameters.name && parameters.launchConfig) {
       if (parameters.name.length > 0) {
-         launchInstance(parameters.name, parameters.launchConfig, callback);
+         checkCanLaunchInstance(function(canLaunch, reason) {
+            if (canLaunch) {
+               launchInstance(parameters.name, parameters.launchConfig, callback);
+            }
+            else {
+               callback(reason);
+            }
+         });
          return;
       }
    }
    callback('Invalid parameters');
 };
+
+function checkCanLaunchInstance(name, launchConfigurationName, callback) {
+   var launchConfiguration = launchConfigurations[launchConfigurationName];
+   if (launchConfiguration) {
+      var result = false;
+      var reason = 'unknown';
+
+      // First, check that name matches config constraints
+      if (launchConfiguration.nameMatch) {
+         var nameMatchPass = false;
+         launchConfiguration.nameMatch.forEach(function(regexString) {
+            var regex = new RegExp(regexString);
+            if (regex.test(name)) {
+               nameMatchPass = true;
+            }
+         });
+
+         if (!nameMatchPass) {
+            callback(false, 'Invalid name: ' + name);
+            return;
+         }
+      }
+
+      // Make sure instance doesn't already exist
+      var operations = [];
+
+      var params = {
+         Filters: [
+            {
+               Name: 'tag:Name',
+               Values: [ name ]
+            },
+            {
+               Name: 'instance-state-name',
+               Values: [ 'pending', 'running', 'stopping', 'stopped' ]
+            }
+         ]
+      };
+
+      operations.push(new Promise(function(resolve, reject) {
+         ec2.describeInstances(params, function(err, data) {
+            if (err) {
+               reason = err;
+            }
+            else {
+               if (data.Reservations.length == 0) {
+                  result = true;
+               }
+               else {
+                  reason = 'Instance with name ' + name + ' already exists.';
+               }
+            }
+            resolve();
+         });
+      }));
+
+      Promise.all(operations).then(function() {
+         callback(result, reason);
+      });
+   }
+   else {
+      callback(false, 'Invalid launch configuration');
+   }
+}
 
 function launchInstance(name, launchConfigurationName, callback) {
    var launchConfiguration = launchConfigurations[launchConfigurationName];
@@ -79,11 +157,9 @@ function launchInstance(name, launchConfigurationName, callback) {
             else {
                var operations = [];
                operations.push(new Promise(function(resolve, reject) {
-                  setTimeout(function() {
-                     tagVolumes(name, data.Instances[0].InstanceId, function() {
-                        resolve();
-                     });
-                  }, 3000);
+                  tagVolumes(name, data.Instances[0].InstanceId, function() {
+                     resolve();
+                  });
                }));
                Promise.all(operations).then(function() {
                   callback(null, data);
@@ -109,43 +185,45 @@ function tagVolumes(name, instanceId, callback) {
       ]
    };
 
-   ec2.describeVolumes(params, function(err, data) {
-      if (err) {
-         // Log, but continue
-         console.error(err);
-         callback();
-      }
-      else {
-         var operations = [];
-         data.Volumes.forEach(function(volume) {
-            operations.push(new Promise(function(resolve, reject) {
-               var params = {
-                  Resources: [
-                     volume.VolumeId
-                  ],
-                  Tags: [
-                     {
-                        Key: "Name",
-                        Value: name
-                     }
-                  ]
-               };
-               ec2.createTags(params, function(err, data) {
-                  if (err) {
-                     // Log, but continue
-                     console.error(err);
-                     resolve();
-                  }
-                  else {
-                     console.log('tag created for ' + volume.VolumeId);
-                     resolve();
-                  }
-               });
-            }));
-         });
-         Promise.all(operations).then(function() {
+   setTimeout(function() {
+      ec2.describeVolumes(params, function(err, data) {
+         if (err) {
+            // Log, but continue
+            console.error(err);
             callback();
-         });
-      }
-   });
+         }
+         else {
+            var operations = [];
+            data.Volumes.forEach(function(volume) {
+               operations.push(new Promise(function(resolve, reject) {
+                  var params = {
+                     Resources: [
+                        volume.VolumeId
+                     ],
+                     Tags: [
+                        {
+                           Key: "Name",
+                           Value: name
+                        }
+                     ]
+                  };
+                  ec2.createTags(params, function(err, data) {
+                     if (err) {
+                        // Log, but continue
+                        console.error(err);
+                        resolve();
+                     }
+                     else {
+                        console.log('tag created for ' + volume.VolumeId);
+                        resolve();
+                     }
+                  });
+               }));
+            });
+            Promise.all(operations).then(function() {
+               callback();
+            });
+         }
+      });
+   }, 3000);
 }
