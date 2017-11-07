@@ -34,7 +34,7 @@ exports.launch = (event, callback) => {
    var parameters = event.queryStringParameters;
    if (parameters && parameters.name && parameters.launchConfig) {
       if (parameters.name.length > 0) {
-         checkCanLaunchInstance(function(canLaunch, reason) {
+         checkCanLaunchInstance(parameters.name, parameters.launchConfig, function(canLaunch, reason) {
             if (canLaunch) {
                launchInstance(parameters.name, parameters.launchConfig, callback);
             }
@@ -42,10 +42,14 @@ exports.launch = (event, callback) => {
                callback(reason);
             }
          });
-         return;
+      }
+      else {
+         callback('Invalid parameters');
       }
    }
-   callback('Invalid parameters');
+   else {
+      callback('Invalid parameters');
+   }
 };
 
 function checkCanLaunchInstance(name, launchConfigurationName, callback) {
