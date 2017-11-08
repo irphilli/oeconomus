@@ -121,6 +121,19 @@ function launchInstance(name, launchConfigurationName, callback) {
    if (launchConfiguration) {
       // get a random subnet id
       var subnet = launchConfiguration.subnets[Math.floor(Math.random()*launchConfiguration.subnets.length)];
+      var tags = [
+         {
+            Key: 'Name',
+            Value: name
+         },
+         {
+            Key: 'os-config',
+            Value: launchConfigurationName
+         }
+      ];
+      if (launchConfiguration.tags) {
+         tags = tags.concat(launchConfiguration.tags);
+      }
 
       if (launchConfiguration.spot) {
          var launchConfig = {
@@ -151,16 +164,6 @@ function launchInstance(name, launchConfigurationName, callback) {
                   callback('Spot instance request failed');
                }
                else {
-                  var tags = [
-                     {
-                        Key: 'Name',
-                        Value: name
-                     },
-                     {
-                        Key: 'os-config',
-                        Value: launchConfigurationName
-                     }
-                  ];
                   tagSpotInstance(requestId, tags, function(err) {
                      callback(err, data);
                   });
@@ -185,16 +188,7 @@ function launchInstance(name, launchConfigurationName, callback) {
             TagSpecifications: [
                {
                   ResourceType: 'instance',
-                  Tags: [
-                     {
-                        Key: 'Name',
-                        Value: name
-                     },
-                     {
-                        Key: 'os-config',
-                        Value: launchConfigurationName
-                     }
-                  ]
+                  Tags: tags
                }
             ]
          };
@@ -295,7 +289,9 @@ function tagSpotInstance(requestId, tags, callback) {
                }
             });
 
-            Promise.all(operations).then(callback).catch(callback);
+            Promise.all(operations).then(function() {
+               callback(null);
+            }).catch(callback);
          }
       });
    }, 5000);
