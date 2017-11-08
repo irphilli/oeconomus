@@ -24,7 +24,7 @@ tagVolumes('i-0c307e6d37ace7a2e', 'do-1', function() {
 */
 
 /*
-checkCanLaunchInstance('pphillips', 'developer', function(canLaunch, reason) {
+checkCanLaunchInstance('pphillips1', 'developer', function(canLaunch, reason) {
    console.log(canLaunch);
    console.log(reason);
 });
@@ -63,8 +63,16 @@ function checkCanLaunchInstance(name, launchConfigurationName, callback) {
          var nameMatchPass = false;
          launchConfiguration.nameMatch.forEach(function(regexString) {
             var regex = new RegExp(regexString);
-            if (regex.test(name)) {
+            var match = regex.exec(name);
+            if (match) {
                nameMatchPass = true;
+               if (launchConfiguration.tags && match.length > 1) {
+                  launchConfiguration.tags.forEach(function(tag) {
+                     if (tag.Value == "$nameMatch") {
+                        tag.Value = match[1];
+                     }
+                  });
+               }
             }
          });
 
