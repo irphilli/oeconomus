@@ -16,10 +16,12 @@ module.exports = {
    getLaunchConfigurations: function () {
       var result = {}
       fs.readdirSync(launchConfigDir).forEach(file => {
-         const name = file.replace(/\.json$/, '');
-         const contents = fs.readFileSync(launchConfigDir + '/' + file);
-         // TODO: validate configuration
-         result[name] = JSON.parse(contents);
+         if (file.endsWith('.json')) {
+            const name = file.replace(/\.json$/, '');
+            const contents = fs.readFileSync(launchConfigDir + '/' + file);
+            // TODO: validate configuration
+            result[name] = JSON.parse(contents);
+         }
       });
       return result;
    }

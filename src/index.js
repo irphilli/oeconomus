@@ -45,6 +45,15 @@ exports.handler = (event, context, callback) => {
                sendResponse(err, res, callback);
             });
             break;
+         case 'plugin':
+            var parameters = event.queryStringParameters;
+            if (parameters && parameters.action) {
+               const plugin = require('./plugins/' + action);
+               plugin.run(parameters, function(err, res) {
+                  sendResponse(err, res, callback);
+               });
+               break;
+            }
          default:
             callback(null, {
                statusCode: 400,
@@ -52,7 +61,6 @@ exports.handler = (event, context, callback) => {
                headers: {
                   'Access-Control-Allow-Origin': '*'
                }
-//               body: JSON.stringify(event)
             });
       }
    }
@@ -87,13 +95,3 @@ function sendResponse(err, res, callback) {
       });
    }
 }
-
-/*
-var event = {
-   pathParameters: { action: 'get' }
-}
-exports.handler(event, null, function(err, res) {
-   console.log(err);
-   console.log(res);
-});
-*/
