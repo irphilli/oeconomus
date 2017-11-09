@@ -10,26 +10,6 @@ const launchConfigurations = config.getLaunchConfigurations();
 AWS.config.loadFromPath(config.globalConfig);
 const ec2 = new AWS.EC2({apiVersion: config.awsApiVersion});
 
-/*
-launchInstance('do-1', 'scrum', function(err, result) {
-   console.error(err);
-   console.log(result);
-});
-*/
-
-/*
-tagVolumes('i-0c307e6d37ace7a2e', 'do-1', function() {
-   console.log('done');
-});
-*/
-
-/*
-checkCanLaunchInstance('pphillips1', 'developer', function(canLaunch, reason) {
-   console.log(canLaunch);
-   console.log(reason);
-});
-*/
-
 exports.launch = (event, callback) => {
    var parameters = event.queryStringParameters;
    if (parameters && parameters.name && parameters.launchConfig) {
