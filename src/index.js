@@ -47,8 +47,8 @@ exports.handler = (event, context, callback) => {
             break;
          case 'plugin':
             var parameters = event.queryStringParameters;
-            if (parameters && parameters.action) {
-               const plugin = require('./plugins/' + action);
+            if (parameters && parameters.plugin) {
+               const plugin = require('./plugins/' + parameters.plugin);
                plugin.run(parameters, function(err, res) {
                   sendResponse(err, res, callback);
                });

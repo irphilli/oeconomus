@@ -152,7 +152,7 @@ function launchInstance(name, launchConfigurationName, callback) {
                   callback('Spot instance request failed');
                }
                else {
-                  tagSpotInstance(requestId, tags, function(err) {
+                  tagSpotInstance(requestId, tags, function(err, data) {
                      callback(err, data);
                   });
                }
@@ -192,7 +192,7 @@ function launchInstance(name, launchConfigurationName, callback) {
                   });
                }));
                Promise.all(operations).then(function() {
-                  callback(null, data);
+                  callback(null, data.Instances[0]);
                });
             }
          });
@@ -267,6 +267,30 @@ function tagSpotInstance(requestId, tags, callback) {
                });
             }));
 
+            var result;
+            operations.push(new Promise(function(resolve, reject) {
+               var params = {
+                  InstanceIds: [
+                     instanceId
+                  ]
+               };
+               ec2.describeInstances(params, function(err, data) {
+                  if (err) {
+                     console.log(err);
+                     reject('Error describing spot instance (notify DevOps)');
+                  }
+                  else {
+                     for (var reservationKey in data) {
+                        var reservation = data[reservationKey];
+                        for (var instanceKey in reservation) {
+                           result = reservation[instanceKey]['Instances'][0];
+                        }
+                     }
+                     resolve();
+                  }
+               });
+            }));
+
             tags.forEach(function(tag) {
                if (tag.Key == 'Name') {
                   operations.push(new Promise(function(resolve, reject) {
@@ -278,7 +302,7 @@ function tagSpotInstance(requestId, tags, callback) {
             });
 
             Promise.all(operations).then(function() {
-               callback(null);
+               callback(null, result);
             }).catch(callback);
          }
       });
