@@ -1,4 +1,5 @@
-etc
+config
 node
 node_modules
 package.zip
+test.js
