@@ -223,8 +223,12 @@ function tagSpotInstance(requestId, tags, callback) {
             }
 
             var instanceId = data.SpotInstanceRequests[0].InstanceId;
-            if (data.SpotInstanceRequests[0].Status.Code == 'pending-fulfillment') {
+            if (data.SpotInstanceRequests[0].Status.Code.startsWith('pending')) {
                tagSpotInstance(requestId, tags, callback);
+               return;
+            }
+            else if (data.SpotInstanceRequests[0].Status.Code != 'fulfilled') {
+               callback('Could not fulfill spot request');
                return;
             }
 

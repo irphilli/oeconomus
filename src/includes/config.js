@@ -1,7 +1,7 @@
 const fs = require('fs');
 
 
-const configDir = 'etc';
+const configDir = 'config';
 const globalConfig = configDir + '/config.json';
 const launchConfigDir = configDir + '/LaunchConfigurations';
 
