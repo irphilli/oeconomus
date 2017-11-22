@@ -124,39 +124,67 @@ function launchInstance(name, launchConfigurationName, callback) {
       }
 
       if (launchConfiguration.spot) {
-         var launchConfig = {
-            SpotPrice: launchConfiguration.bid,
-            InstanceCount: 1,
-            InstanceInterruptionBehavior: 'stop',
-            Type: 'persistent',
-            LaunchSpecification: {
-               ImageId: launchConfiguration.ami,
-               SecurityGroupIds: launchConfiguration.securityGroups,
-               InstanceType: launchConfiguration.instanceType,
-               SubnetId: subnet,
-               UserData: launchConfiguration.userData,
-               KeyName: config.keyName,
-               IamInstanceProfile: {
-                  Name: launchConfiguration.role
-               }
-            }
+         var params = {
+            SubnetIds: [ subnet ]
          };
-         ec2.requestSpotInstances(launchConfig, function(err, data) {
-            if (err) {
+         ec2.describeSubnets(params, function(err,data) {
+            if (err || data.Subnets.length != 1) {
                callback(err);
+               return;
             }
-            else {
-               var requestId = data.SpotInstanceRequests[0].SpotInstanceRequestId;
-               var state = data.SpotInstanceRequests[0].State;
-               if (state == 'cancelled' || data.state == 'failed') {
-                  callback('Spot instance request failed');
+
+            var params = {
+               AvailabilityZone: data.Subnets[0].AvailabilityZone,
+               ProductDescriptions: [ 'Linux/UNIX' ],
+               MaxResults: 1,
+               InstanceTypes: [ launchConfiguration.instanceType ]
+            };
+            ec2.describeSpotPriceHistory(params, function(err, data) {
+               if (err || data.SpotPriceHistory.length != 1) {
+                  callback(err);
+                  return;
                }
-               else {
-                  tagSpotInstance(requestId, tags, function(err, data) {
-                     callback(err, data);
+
+               if (data.SpotPriceHistory[0].SpotPrice < launchConfiguration.bid) {
+                  var launchConfig = {
+                     SpotPrice: launchConfiguration.bid,
+                     InstanceCount: 1,
+                     InstanceInterruptionBehavior: 'stop',
+                     Type: 'persistent',
+                     LaunchSpecification: {
+                        ImageId: launchConfiguration.ami,
+                        SecurityGroupIds: launchConfiguration.securityGroups,
+                        InstanceType: launchConfiguration.instanceType,
+                        SubnetId: subnet,
+                        UserData: launchConfiguration.userData,
+                        KeyName: config.keyName,
+                        IamInstanceProfile: {
+                           Name: launchConfiguration.role
+                        }
+                     }
+                  };
+                  ec2.requestSpotInstances(launchConfig, function(err, data) {
+                     if (err) {
+                        callback(err);
+                     }
+                     else {
+                        var requestId = data.SpotInstanceRequests[0].SpotInstanceRequestId;
+                        var state = data.SpotInstanceRequests[0].State;
+                        if (state == 'cancelled' || data.state == 'failed') {
+                           callback('Spot instance request failed');
+                        }
+                        else {
+                           tagSpotInstance(requestId, tags, function(err, data) {
+                              callback(err, data);
+                           });
+                        }
+                     }
                   });
                }
-            }
+               else {
+                  callback('Spot price bid too low (try again later)');
+               }
+            });
          });
       }
       else
