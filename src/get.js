@@ -45,6 +45,9 @@ exports.get = (callback) => {
                      });
                   }
                }
+               result['instances'][currentLaunchName].sort(function(a, b) {
+                  return getName(a.Tags).localeCompare(getName(b.Tags));
+               });
                resolve();
             }
          });
@@ -55,3 +58,14 @@ exports.get = (callback) => {
       callback(null, result);
    }).catch(callback);
 };
+
+function getName(tags) {
+   var result = "unknown";
+   tags.forEach(function(tag) {
+      if (tag.Key == "Name") {
+         result = tag.Value;
+      }
+   });
+
+   return result;
+}
