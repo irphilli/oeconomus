@@ -123,222 +123,58 @@ function launchInstance(name, launchConfigurationName, callback) {
          tags = tags.concat(launchConfiguration.tags);
       }
 
+      var launchConfig = {
+         ImageId: launchConfiguration.ami,
+         MaxCount: 1,
+         MinCount: 1,
+         SecurityGroupIds: launchConfiguration.securityGroups,
+         InstanceType: launchConfiguration.instanceType,
+         SubnetId: subnet,
+         UserData: launchConfiguration.userData,
+         KeyName: config.keyName,
+         IamInstanceProfile: {
+            Name: launchConfiguration.role
+         },
+         TagSpecifications: [
+            {
+               ResourceType: 'instance',
+               Tags: tags
+            }
+         ]
+      };
+
       if (launchConfiguration.spot) {
-         var params = {
-            SubnetIds: [ subnet ]
-         };
-         ec2.describeSubnets(params, function(err,data) {
-            if (err || data.Subnets.length != 1) {
-               callback(err);
-               return;
+         launchConfig.InstanceMarketOptions = {
+            MarketType: 'spot',
+            SpotOptions: {
+               MaxPrice: launchConfiguration.bid,
+               SpotInstanceType: 'persistent',
+               InstanceInterruptionBehavior: 'hibernate'
             }
-
-            var params = {
-               AvailabilityZone: data.Subnets[0].AvailabilityZone,
-               ProductDescriptions: [ 'Linux/UNIX' ],
-               MaxResults: 1,
-               InstanceTypes: [ launchConfiguration.instanceType ]
-            };
-            ec2.describeSpotPriceHistory(params, function(err, data) {
-               if (err || data.SpotPriceHistory.length != 1) {
-                  callback(err);
-                  return;
-               }
-
-               if (data.SpotPriceHistory[0].SpotPrice < launchConfiguration.bid) {
-                  var launchConfig = {
-                     SpotPrice: launchConfiguration.bid,
-                     InstanceCount: 1,
-                     InstanceInterruptionBehavior: 'stop',
-                     Type: 'persistent',
-                     LaunchSpecification: {
-                        ImageId: launchConfiguration.ami,
-                        SecurityGroupIds: launchConfiguration.securityGroups,
-                        InstanceType: launchConfiguration.instanceType,
-                        SubnetId: subnet,
-                        UserData: launchConfiguration.userData,
-                        KeyName: config.keyName,
-                        IamInstanceProfile: {
-                           Name: launchConfiguration.role
-                        }
-                     }
-                  };
-                  ec2.requestSpotInstances(launchConfig, function(err, data) {
-                     if (err) {
-                        callback(err);
-                     }
-                     else {
-                        var requestId = data.SpotInstanceRequests[0].SpotInstanceRequestId;
-                        var state = data.SpotInstanceRequests[0].State;
-                        if (state == 'cancelled' || data.state == 'failed') {
-                           callback('Spot instance request failed');
-                        }
-                        else {
-                           tagSpotInstance(requestId, tags, function(err, data) {
-                              callback(err, data);
-                           });
-                        }
-                     }
-                  });
-               }
-               else {
-                  callback('Spot price bid too low (try again later)');
-               }
-            });
-         });
+         };
       }
-      else
-      {
-         var launchConfig = {
-            ImageId: launchConfiguration.ami,
-            MaxCount: 1,
-            MinCount: 1,
-            SecurityGroupIds: launchConfiguration.securityGroups,
-            InstanceType: launchConfiguration.instanceType,
-            SubnetId: subnet,
-            UserData: launchConfiguration.userData,
-            KeyName: config.keyName,
-            IamInstanceProfile: {
-               Name: launchConfiguration.role
-            },
-            TagSpecifications: [
-               {
-                  ResourceType: 'instance',
-                  Tags: tags
-               }
-            ]
-         };
-         ec2.runInstances(launchConfig, function(err, data) {
-            if (err) {
-               callback('runInstances failed: ' + err);
-            }
-            else {
-               var operations = [];
-               operations.push(new Promise(function(resolve, reject) {
-                  tagVolumes(data.Instances[0].InstanceId, name, function() {
-                     resolve();
-                  });
-               }));
-               Promise.all(operations).then(function() {
-                  callback(null, data.Instances[0]);
+
+      ec2.runInstances(launchConfig, function(err, data) {
+         if (err) {
+            callback('runInstances failed: ' + err);
+         }
+         else {
+            var operations = [];
+            operations.push(new Promise(function(resolve, reject) {
+               tagVolumes(data.Instances[0].InstanceId, name, function() {
+                  resolve();
                });
-            }
-         });
-      }
+            }));
+            Promise.all(operations).then(function() {
+               callback(null, data.Instances[0]);
+            });
+         }
+      });
+
    }
    else {
       callback('Invalid launch configuration');
    }
-}
-
-function tagSpotInstance(requestId, tags, callback) {
-   setTimeout(function() {
-      var params = {
-         SpotInstanceRequestIds: [
-            requestId
-         ]
-      };
-      ec2.describeSpotInstanceRequests(params, function(err, data) {
-         if (err) {
-            console.log(err);
-            callback('Error tagging spot instance (notify DevOps)');
-         }
-         else {
-            if (data.SpotInstanceRequests.length == 0) {
-               console.log('No spot instances');
-               callback('Error tagging spot instance (notify DevOps)');
-               return;
-            }
-
-            var instanceId = data.SpotInstanceRequests[0].InstanceId;
-            if (data.SpotInstanceRequests[0].Status.Code.startsWith('pending')) {
-               tagSpotInstance(requestId, tags, callback);
-               return;
-            }
-            else if (data.SpotInstanceRequests[0].Status.Code != 'fulfilled') {
-               callback('Could not fulfill spot request');
-               return;
-            }
-
-            var operations = [];
-            operations.push(new Promise(function(resolve, reject) {
-               var params = {
-                  Resources: [
-                     requestId
-                  ],
-                  Tags: tags
-               };
-               ec2.createTags(params, function(err, data) {
-                  if (err) {
-                     console.log(err);
-                     reject('Error tagging spot instance (notify DevOps)');
-                  }
-                  else {
-                     console.log('tags created for ' + requestId);
-                     resolve();
-                  }
-               });
-            }));
-
-            operations.push(new Promise(function(resolve, reject) {
-               var params = {
-                  Resources: [
-                     instanceId
-                  ],
-                  Tags: tags
-               };
-               ec2.createTags(params, function(err, data) {
-                  if (err) {
-                     console.log(err);
-                     reject('Error tagging spot instance (notify DevOps)');
-                  }
-                  else {
-                     console.log('tags created for ' + instanceId);
-                     resolve();
-                  }
-               });
-            }));
-
-            var result;
-            operations.push(new Promise(function(resolve, reject) {
-               var params = {
-                  InstanceIds: [
-                     instanceId
-                  ]
-               };
-               ec2.describeInstances(params, function(err, data) {
-                  if (err) {
-                     console.log(err);
-                     reject('Error describing spot instance (notify DevOps)');
-                  }
-                  else {
-                     for (var reservationKey in data) {
-                        var reservation = data[reservationKey];
-                        for (var instanceKey in reservation) {
-                           result = reservation[instanceKey]['Instances'][0];
-                        }
-                     }
-                     resolve();
-                  }
-               });
-            }));
-
-            tags.forEach(function(tag) {
-               if (tag.Key == 'Name') {
-                  operations.push(new Promise(function(resolve, reject) {
-                     tagVolumes(instanceId, tag.Value, function() {
-                        resolve();
-                     });
-                  }));
-               }
-            });
-
-            Promise.all(operations).then(function() {
-               callback(null, result);
-            }).catch(callback);
-         }
-      });
-   }, 5000);
 }
 
 function tagVolumes(instanceId, name, callback) {
