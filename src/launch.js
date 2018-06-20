@@ -14,6 +14,7 @@ exports.launch = (event, callback) => {
    var parameters = event.queryStringParameters;
    if (parameters && parameters.name && parameters.launchConfig) {
       if (parameters.name.length > 0) {
+         parameters.name = parameters.name.toLowerCase();
          checkCanLaunchInstance(parameters.name, parameters.launchConfig, function(canLaunch, reason) {
             if (canLaunch) {
                launchInstance(parameters.name, parameters.launchConfig, callback);
